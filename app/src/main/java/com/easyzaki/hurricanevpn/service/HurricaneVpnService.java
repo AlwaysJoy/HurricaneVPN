@@ -60,6 +60,7 @@ public class HurricaneVpnService extends VpnService {
     @Override
     public void onCreate() {
         super.onCreate();
+        isRunning = true;
         Builder builder = new Builder();
 //        builder.setMtu(1024*1024);
         builder.addAddress("10.103.18.208", 25);

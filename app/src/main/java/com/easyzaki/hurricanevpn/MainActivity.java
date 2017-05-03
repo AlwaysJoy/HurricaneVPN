@@ -1,30 +1,96 @@
 package com.easyzaki.hurricanevpn;
 
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.net.VpnService;
 import android.os.Bundle;
+import android.support.v4.content.LocalBroadcastManager;
 import android.support.v7.app.AppCompatActivity;
+import android.view.View;
+import android.widget.Button;
 
 import com.easyzaki.hurricanevpn.service.HurricaneVpnService;
 
 public class MainActivity extends AppCompatActivity {
 
+    private static final int VPN_REQUEST_CODE = 0x0F;
+
+    private boolean waitingForVPNStart;
+
+    private BroadcastReceiver vpnStateReceiver = new BroadcastReceiver()
+    {
+        @Override
+        public void onReceive(Context context, Intent intent)
+        {
+            if (HurricaneVpnService.BROADCAST_VPN_STATE.equals(intent.getAction()))
+            {
+                if (intent.getBooleanExtra("running", false))
+                    waitingForVPNStart = false;
+            }
+        }
+    };
+
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
+    protected void onCreate(Bundle savedInstanceState)
+    {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        Intent intent = VpnService.prepare(this);
-        if (intent != null) {
-            startActivityForResult(intent, 0);
-        } else {
-            onActivityResult(0, RESULT_OK, null);
+        final Button vpnButton = (Button)findViewById(R.id.vpn);
+        vpnButton.setOnClickListener(new View.OnClickListener()
+        {
+            @Override
+            public void onClick(View v)
+            {
+                startVPN();
+            }
+        });
+        waitingForVPNStart = false;
+        LocalBroadcastManager.getInstance(this).registerReceiver(vpnStateReceiver,
+                new IntentFilter(HurricaneVpnService.BROADCAST_VPN_STATE));
+    }
+
+    private void startVPN()
+    {
+        Intent vpnIntent = VpnService.prepare(this);
+        if (vpnIntent != null)
+            startActivityForResult(vpnIntent, VPN_REQUEST_CODE);
+        else
+            onActivityResult(VPN_REQUEST_CODE, RESULT_OK, null);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data)
+    {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == VPN_REQUEST_CODE && resultCode == RESULT_OK)
+        {
+            waitingForVPNStart = true;
+            startService(new Intent(this, HurricaneVpnService.class));
+            enableButton(false);
         }
     }
 
     @Override
-    protected void onActivityResult(int request, int result, Intent data) {
-        if (result == RESULT_OK) {
-            startService(new Intent(this, HurricaneVpnService.class));
+    protected void onResume() {
+        super.onResume();
+
+        enableButton(!waitingForVPNStart && !HurricaneVpnService.isRunning());
+    }
+
+    private void enableButton(boolean enable)
+    {
+        final Button vpnButton = (Button) findViewById(R.id.vpn);
+        if (enable)
+        {
+            vpnButton.setEnabled(true);
+            vpnButton.setText(R.string.start_vpn);
+        }
+        else
+        {
+            vpnButton.setEnabled(false);
+            vpnButton.setText(R.string.stop_vpn);
         }
     }
 }
